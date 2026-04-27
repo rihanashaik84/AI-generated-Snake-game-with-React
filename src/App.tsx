@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Play, Pause, SkipForward, SkipBack, Music, Volume2, Trophy, AlertTriangle } from 'lucide-react';
+import { Play, Pause, SkipForward, SkipBack, Music, Volume2, Trophy, AlertTriangle, ChevronUp, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 const SONGS = [
@@ -30,6 +30,7 @@ export default function App() {
   
   const directionRef = useRef(INITIAL_DIRECTION);
   const lastProcessedDirectionRef = useRef(INITIAL_DIRECTION);
+  const touchStartRef = useRef({ x: 0, y: 0 });
 
   // Focus ref for the game board so keyboard controls work properly
   const gameBoardRef = useRef<HTMLDivElement>(null);
@@ -205,6 +206,57 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isGameRunning, gameOver]);
   
+  const handleDirectionClick = (dir: 'UP' | 'DOWN' | 'LEFT' | 'RIGHT') => {
+    if (!isGameRunning && !gameOver) setIsGameRunning(true);
+    
+    const { x: prevX, y: prevY } = lastProcessedDirectionRef.current;
+
+    switch (dir) {
+      case 'UP':
+        if (prevY !== 1) directionRef.current = { x: 0, y: -1 };
+        break;
+      case 'DOWN':
+        if (prevY !== -1) directionRef.current = { x: 0, y: 1 };
+        break;
+      case 'LEFT':
+        if (prevX !== 1) directionRef.current = { x: -1, y: 0 };
+        break;
+      case 'RIGHT':
+        if (prevX !== -1) directionRef.current = { x: 1, y: 0 };
+        break;
+    }
+  };
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    // Only register touch if it's a single touch
+    if (e.touches.length !== 1) return;
+    touchStartRef.current = {
+      x: e.touches[0].clientX,
+      y: e.touches[0].clientY
+    };
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (!touchStartRef.current.x && !touchStartRef.current.y) return;
+    const endX = e.changedTouches[0].clientX;
+    const endY = e.changedTouches[0].clientY;
+    const deltaX = endX - touchStartRef.current.x;
+    const deltaY = endY - touchStartRef.current.y;
+
+    touchStartRef.current = { x: 0, y: 0 }; // reset
+
+    // Ignore very small swipes to prevent accidental turns when tapping
+    if (Math.abs(deltaX) < 30 && Math.abs(deltaY) < 30) return;
+
+    if (Math.abs(deltaX) > Math.abs(deltaY)) {
+      if (deltaX > 0) handleDirectionClick('RIGHT');
+      else handleDirectionClick('LEFT');
+    } else {
+      if (deltaY > 0) handleDirectionClick('DOWN');
+      else handleDirectionClick('UP');
+    }
+  };
+
   const renderGrid = () => {
     const cells = [];
     for (let y = 0; y < GRID_SIZE; y++) {
@@ -241,10 +293,10 @@ export default function App() {
   };
 
   return (
-    <div className="h-screen bg-[#020205] text-[#e0e0ff] font-sans relative overflow-hidden flex flex-col">
+    <div className="min-h-[100dvh] bg-[#020205] text-[#e0e0ff] font-sans relative overflow-x-hidden flex flex-col">
       {/* Background Ambient Glows */}
-      <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-cyan-900/20 blur-[120px] rounded-full pointer-events-none"></div>
-      <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-fuchsia-900/20 blur-[120px] rounded-full pointer-events-none"></div>
+      <div className="fixed top-[-10%] left-[-10%] w-[40%] h-[40%] bg-cyan-900/20 blur-[120px] rounded-full pointer-events-none"></div>
+      <div className="fixed bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-fuchsia-900/20 blur-[120px] rounded-full pointer-events-none"></div>
 
       <audio ref={audioRef} src={SONGS[currentSongIndex].url} preload="auto" />
 
@@ -273,7 +325,7 @@ export default function App() {
       </header>
 
       {/* Main Play Area */}
-      <main className="flex-1 flex flex-col lg:flex-row px-4 lg:px-10 py-4 lg:py-8 gap-4 lg:gap-8 items-center lg:items-stretch z-10 overflow-hidden">
+      <main className="flex-1 flex flex-col lg:flex-row px-4 lg:px-10 py-4 lg:py-8 gap-4 lg:gap-8 items-center lg:items-stretch z-10 w-full max-w-7xl mx-auto">
         
         {/* Left Side: Music Info */}
         <aside className="w-full lg:w-64 flex flex-col justify-between hidden lg:flex">
@@ -317,13 +369,15 @@ export default function App() {
         </aside>
 
         {/* Center: Snake Game Window */}
-        <section className="flex-1 relative flex items-center justify-center min-h-[300px] lg:min-h-[400px]">
+        <section className="flex-1 w-full relative flex flex-col items-center justify-center min-h-[300px] lg:min-h-[400px]">
           <div className="absolute inset-0 bg-cyan-400/5 rounded-3xl border-2 border-cyan-400/20 shadow-[0_0_50px_rgba(34,211,238,0.1)] pointer-events-none hidden lg:block"></div>
           
           <div 
-             className="relative aspect-square w-full max-w-[480px] sm:w-[480px] bg-black/40 border border-white/5 shadow-inner overflow-hidden focus:outline-none focus:border-cyan-400/50 transition-colors"
+             className="relative aspect-square w-full max-w-[480px] bg-black/40 border border-white/5 shadow-inner overflow-hidden focus:outline-none focus:border-cyan-400/50 transition-colors touch-none"
              tabIndex={0}
              ref={gameBoardRef}
+             onTouchStart={handleTouchStart}
+             onTouchEnd={handleTouchEnd}
           >
             {/* Grid background simulation */}
             <div className="absolute inset-0 opacity-10 pointer-events-none" style={{ backgroundImage: 'linear-gradient(to right, #ffffff 1px, transparent 1px), linear-gradient(to bottom, #ffffff 1px, transparent 1px)', backgroundSize: '10% 10%' }}></div>
@@ -376,9 +430,44 @@ export default function App() {
 
             {!isGameRunning && !gameOver && (
               <div className="absolute bottom-4 left-0 right-0 text-center pointer-events-none z-20">
-                <p className="text-[10px] text-white/20 uppercase tracking-[0.3em]">Use Arrow Keys or WASD</p>
+                <p className="text-[10px] text-white/20 uppercase tracking-[0.3em] lg:block hidden">Use Arrow Keys or WASD</p>
+                <p className="text-[10px] text-white/20 uppercase tracking-[0.3em] block lg:hidden">Swipe or use D-Pad</p>
               </div>
             )}
+          </div>
+
+          {/* Mobile D-Pad Controls */}
+          <div className="mt-4 lg:hidden grid grid-cols-3 gap-2 w-[220px] sm:w-[260px] z-20 relative mx-auto mb-4">
+            <div />
+            <button 
+              onClick={() => handleDirectionClick('UP')}
+              className="bg-white/5 hover:bg-cyan-400/20 active:bg-cyan-400/40 aspect-square rounded-xl border border-white/10 shadow-[0_4px_0_rgba(255,255,255,0.05)] active:translate-y-1 active:shadow-none transition-all flex items-center justify-center overflow-hidden relative"
+            >
+              <ChevronUp className="w-10 h-10 text-cyan-400 drop-shadow-[0_0_5px_rgba(34,211,238,0.5)]" />
+              <div className="absolute inset-0 border border-cyan-400/20 rounded-xl opacity-0 hover:opacity-100 transition-opacity"></div>
+            </button>
+            <div />
+            <button 
+              onClick={() => handleDirectionClick('LEFT')}
+              className="bg-white/5 hover:bg-cyan-400/20 active:bg-cyan-400/40 aspect-square rounded-xl border border-white/10 shadow-[0_4px_0_rgba(255,255,255,0.05)] active:translate-y-1 active:shadow-none transition-all flex items-center justify-center overflow-hidden relative"
+            >
+              <ChevronLeft className="w-10 h-10 text-cyan-400 drop-shadow-[0_0_5px_rgba(34,211,238,0.5)]" />
+              <div className="absolute inset-0 border border-cyan-400/20 rounded-xl opacity-0 hover:opacity-100 transition-opacity"></div>
+            </button>
+            <button 
+              onClick={() => handleDirectionClick('DOWN')}
+              className="bg-white/5 hover:bg-cyan-400/20 active:bg-cyan-400/40 aspect-square rounded-xl border border-white/10 shadow-[0_4px_0_rgba(255,255,255,0.05)] active:translate-y-1 active:shadow-none transition-all flex items-center justify-center overflow-hidden relative"
+            >
+              <ChevronDown className="w-10 h-10 text-cyan-400 drop-shadow-[0_0_5px_rgba(34,211,238,0.5)]" />
+              <div className="absolute inset-0 border border-cyan-400/20 rounded-xl opacity-0 hover:opacity-100 transition-opacity"></div>
+            </button>
+            <button 
+              onClick={() => handleDirectionClick('RIGHT')}
+              className="bg-white/5 hover:bg-cyan-400/20 active:bg-cyan-400/40 aspect-square rounded-xl border border-white/10 shadow-[0_4px_0_rgba(255,255,255,0.05)] active:translate-y-1 active:shadow-none transition-all flex items-center justify-center overflow-hidden relative"
+            >
+              <ChevronRight className="w-10 h-10 text-cyan-400 drop-shadow-[0_0_5px_rgba(34,211,238,0.5)]" />
+              <div className="absolute inset-0 border border-cyan-400/20 rounded-xl opacity-0 hover:opacity-100 transition-opacity"></div>
+            </button>
           </div>
         </section>
 
